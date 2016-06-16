@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/matus-kacmar/banka-web/sanitize"
 )
 
 var (
@@ -60,13 +62,17 @@ func homePageHandler(writer http.ResponseWriter, request *http.Request) {
 	writer.Write([]byte(page))
 }
 
+// Login handler
 func loginHandler(writer http.ResponseWriter, request *http.Request) {
-	vars := mux.Vars(request)
+	email := request.FormValue("username")
+	password := request.FormValue("password")
 
-	username := vars["username"]
-	password := vars["password"]
-
-	log.Println(username + " " + password)
+	if sanitize.ParseEmail(email) && sanitize.ParsePassword(password) {
+		fmt.Fprint(writer, "Wohooo logged in!")
+	} else {
+		writer.WriteHeader(http.StatusOK)
+		writer.Write([]byte(loadPage("index", writer)))
+	}
 }
 
 func main() {
