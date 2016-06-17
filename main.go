@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"html/template"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -13,8 +14,14 @@ import (
 )
 
 var (
-	logFile *os.File
+	logFile   *os.File
+	router    *mux.Router
+	templates map[string]*template.Template
 )
+
+type ErrorData struct {
+	Message string
+}
 
 // Initialize all necessary things as log files and such...
 func init() {
@@ -31,6 +38,12 @@ func init() {
 	}
 
 	makeLog("Server started at >>")
+
+	if templates == nil {
+		templates = make(map[string]*template.Template)
+	}
+
+	templates["index"] = template.Must(template.ParseFiles("public/index.html"))
 }
 
 // Makes log to a log file
@@ -44,22 +57,39 @@ func makeLog(logInput string) {
 }
 
 // Load html page from directory
-func loadPage(pageName string, writer http.ResponseWriter) []byte {
-	file, err := ioutil.ReadFile("public/" + pageName + ".html")
+func loadPage(pageName string, writer http.ResponseWriter, templateName string, viewModel interface{}) {
+	templ, ok := templates[pageName]
 
-	if err != nil {
-		http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	if !ok {
+		http.Error(writer, "template does not exists", http.StatusInternalServerError)
 	}
 
-	return file
+	if templateName == "" {
+		err := templ.Execute(writer, viewModel)
+
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+		}
+	} else {
+		err := templ.ExecuteTemplate(writer, templateName, viewModel)
+
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+		}
+	}
 }
 
 // Home page handler
 func homePageHandler(writer http.ResponseWriter, request *http.Request) {
-	page := loadPage("index", writer)
+	errorMessage := request.URL.Query().Get("err")
 
-	writer.WriteHeader(http.StatusOK)
-	writer.Write([]byte(page))
+	if errorMessage != "" {
+		if strings.EqualFold(errorMessage, "login") {
+			loadPage("index", writer, "", &ErrorData{Message: "Wrong username or password"})
+		}
+	} else {
+		loadPage("index", writer, "", &ErrorData{Message: ""})
+	}
 }
 
 // Login handler
@@ -70,14 +100,13 @@ func loginHandler(writer http.ResponseWriter, request *http.Request) {
 	if sanitize.ParseEmail(email) && sanitize.ParsePassword(password) {
 		fmt.Fprint(writer, "Wohooo logged in!")
 	} else {
-		writer.WriteHeader(http.StatusOK)
-		writer.Write([]byte(loadPage("index", writer)))
+		http.Redirect(writer, request, "/?err=login", 302)
 	}
 }
 
 func main() {
 
-	router := mux.NewRouter()
+	router = mux.NewRouter().StrictSlash(false)
 	resourceFileServer := http.FileServer(http.Dir("./public/resources/"))
 	router.PathPrefix("/resources/").Handler(http.StripPrefix("/resources/", resourceFileServer))
 

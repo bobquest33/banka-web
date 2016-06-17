@@ -74,3 +74,12 @@ footer {
     font-size: 14px;
     color: #3c989d;
 }
+.error {
+    display: block;
+    width: 100%;
+    color: red;
+    font-size: 12px;
+    font-weight: lighter;
+    text-align: center;
+    margin-top: -8px;
+}
