@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"encoding/gob"
 	"html/template"
 	"log"
 	"net/http"
@@ -10,15 +10,20 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
+	"github.com/matus-kacmar/banka-web/database"
 	"github.com/matus-kacmar/banka-web/sanitize"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
-	logFile   *os.File
-	router    *mux.Router
-	templates map[string]*template.Template
+	logFile      *os.File
+	router       *mux.Router
+	sessionStore *sessions.CookieStore
+	templates    map[string]*template.Template
 )
 
+// ErrorData is structure for parsing error messages to template.
 type ErrorData struct {
 	Message string
 }
@@ -37,6 +42,8 @@ func init() {
 		}
 	}
 
+	sessionStore = sessions.NewCookieStore([]byte("much-secret-phrase-very-secure"))
+	gob.Register(&database.Client{})
 	makeLog("Server started at >>")
 
 	if templates == nil {
@@ -44,6 +51,7 @@ func init() {
 	}
 
 	templates["index"] = template.Must(template.ParseFiles("public/index.html"))
+	templates["bank"] = template.Must(template.ParseFiles("public/pages/bank.html", "public/templates/header.html", "public/templates/main.html", "public/templates/footer.html"))
 }
 
 // Makes log to a log file
@@ -84,9 +92,13 @@ func homePageHandler(writer http.ResponseWriter, request *http.Request) {
 	errorMessage := request.URL.Query().Get("err")
 
 	if errorMessage != "" {
+
 		if strings.EqualFold(errorMessage, "login") {
 			loadPage("index", writer, "", &ErrorData{Message: "Wrong username or password"})
+		} else if strings.EqualFold(errorMessage, "wrong-settings") {
+			loadPage("index", writer, "", &ErrorData{Message: "Wrong browser settings cannot log in"})
 		}
+
 	} else {
 		loadPage("index", writer, "", &ErrorData{Message: ""})
 	}
@@ -97,11 +109,64 @@ func loginHandler(writer http.ResponseWriter, request *http.Request) {
 	email := request.FormValue("username")
 	password := request.FormValue("password")
 
+	// Compare input to sanitize package regexes
 	if sanitize.ParseEmail(email) && sanitize.ParsePassword(password) {
-		fmt.Fprint(writer, "Wohooo logged in!")
+		client := database.GetClientByUsername(email)
+		err := bcrypt.CompareHashAndPassword([]byte(client.Password), []byte(password))
+
+		// err == nil means if password entered by user matches password from db
+		if err == nil {
+			// store session with user info
+			session, _ := sessionStore.Get(request, "bank-user")
+			session.Values["user"] = &client
+
+			// sets session otions, age o session is set to one minute for testing purposes
+			session.Options = &sessions.Options{
+				Path:     "/",
+				MaxAge:   60,
+				HttpOnly: true,
+			}
+
+			err := session.Save(request, writer)
+
+			if err != nil {
+				log.Println(err)
+				http.Redirect(writer, request, "/?err=wrong-settings", 302)
+			}
+
+			http.Redirect(writer, request, "/bank", 302)
+		} else {
+			http.Redirect(writer, request, "/?err=login", 302)
+		}
 	} else {
 		http.Redirect(writer, request, "/?err=login", 302)
 	}
+}
+
+func bankHandler(writer http.ResponseWriter, request *http.Request) {
+
+	session, _ := sessionStore.Get(request, "bank-user")
+	data := session.Values["user"]
+	client, ok := data.(*database.Client)
+
+	if !ok {
+		http.Redirect(writer, request, "/", 302)
+	}
+
+	loadPage("bank", writer, "", client)
+}
+
+func logOutHandler(writer http.ResponseWriter, request *http.Request) {
+	session, _ := sessionStore.Get(request, "bank-user")
+	session.Values["user"] = nil
+	err := session.Save(request, writer)
+
+	if err != nil {
+		log.Println(err)
+		http.Redirect(writer, request, "/?err=wrong-settings", 302)
+	}
+
+	http.Redirect(writer, request, "/", 302)
 }
 
 func main() {
@@ -112,6 +177,8 @@ func main() {
 
 	router.HandleFunc("/", homePageHandler).Methods("GET")
 	router.HandleFunc("/login", loginHandler).Methods("POST")
+	router.HandleFunc("/bank", bankHandler).Methods("GET")
+	router.HandleFunc("/bank/logout", logOutHandler).Methods("GET")
 
 	server := &http.Server{
 		Addr:    ":8080",
