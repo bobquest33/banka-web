@@ -1,0 +1,14 @@
+<table>
+    <tr>
+        <td>Amount</td>
+        <td>Paid amount</td>
+        <td>Interest</td>
+    </tr>
+{{ range $key, $value := . }}
+    <tr>
+        <td>{{$value.Amount}} €</td>
+        <td>{{$value.PaidAmount}} €</td>
+        <td>{{$value.Interest}}%</td>
+    </tr>
+{{ end }}
+</table>

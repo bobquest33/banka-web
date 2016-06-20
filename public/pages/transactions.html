@@ -1,0 +1,16 @@
+<table>
+    <tr>
+        <td>Client request</td>
+        <td>Account ID</td>
+        <td>Transaction date</td>
+        <td>Amount</td>
+    </tr>
+{{ range $key, $value := . }}
+    <tr>
+        <td>{{$value.ClientRequest}}</td>
+        <td>{{$value.AccountID}}</td>
+        <td>{{$value.TransDate}}</td>
+        <td>{{$value.Value}} €</td>
+    </tr>
+{{ end }}
+</table>

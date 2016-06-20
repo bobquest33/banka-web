@@ -1,0 +1,12 @@
+<table>
+    <tr>
+        <td>Account ID</td>
+        <td>Balance</td>
+    </tr>
+{{ range $key, $value := . }}
+    <tr>
+        <td>{{$value.AccountID}}</td>
+        <td>{{$value.Balance}} €</td>
+    </tr>
+{{ end }}
+</table>

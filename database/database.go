@@ -31,6 +31,27 @@ type Client struct {
 	Active      bool
 }
 
+// Account struct holds cllients account data
+type Account struct {
+	AccountID int
+	Balance   float64
+}
+
+// Loan struct holds clients loan data
+type Loan struct {
+	Amount     float64
+	PaidAmount float64
+	Interest   float64
+}
+
+// Transaction struct holds the data of client transaction
+type Transaction struct {
+	ClientRequest bool
+	AccountID     int
+	TransDate     string
+	Value         float64
+}
+
 func init() {
 	var err error
 
@@ -71,6 +92,108 @@ func GetClientByUsername(clientUsername string) Client {
 	}
 
 	return Client{id, firstname, lastname, dateofbirth, username, password, active}
+}
+
+// GetClientAccountsById returns array of account structs with client data
+func GetClientAccountsById(id int) []Account {
+	query := "SELECT accountid,balance FROM accounts WHERE clientid=$1"
+
+	statement, err := database.Prepare(query)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer statement.Close()
+
+	var (
+		accountid int
+		balance   float64
+	)
+
+	result, err := statement.Query(id)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var accounts []Account
+
+	for result.Next() {
+		result.Scan(&accountid, &balance)
+		accounts = append(accounts, Account{accountid, balance})
+	}
+
+	return accounts
+}
+
+// GetClientLoansById return list of loans of the client
+func GetClientLoansById(id int) []Loan {
+	query := "SELECT amount,paidamount,interest FROM loans WHERE clientid=$1"
+
+	statement, err := database.Prepare(query)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer statement.Close()
+
+	var (
+		amount     float64
+		paidamount float64
+		interest   float64
+	)
+
+	result, err := statement.Query(id)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var loans []Loan
+
+	for result.Next() {
+		result.Scan(&amount, &paidamount, &interest)
+		loans = append(loans, Loan{amount, paidamount, interest})
+	}
+
+	return loans
+}
+
+// GetClientTransactionsById return list of users transactions
+func GetClientTransactionsById(id int) []Transaction {
+	query := "SELECT personid,clientrequest,accountid,transdate,value FROM transactions WHERE personid=$1"
+
+	statement, err := database.Prepare(query)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer statement.Close()
+
+	var (
+		clientrequest bool
+		accountid     int
+		transdate     string
+		value         float64
+	)
+
+	result, err := statement.Query(id)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var transactions []Transaction
+
+	for result.Next() {
+		result.Scan(&clientrequest, &accountid, &transdate, &value)
+		transactions = append(transactions, Transaction{clientrequest, accountid, transdate, value})
+	}
+
+	return transactions
 }
 
 // CloseConnection terminates connection to database

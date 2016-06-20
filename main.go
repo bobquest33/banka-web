@@ -52,6 +52,9 @@ func init() {
 
 	templates["index"] = template.Must(template.ParseFiles("public/index.html"))
 	templates["bank"] = template.Must(template.ParseFiles("public/pages/bank.html", "public/templates/header.html", "public/templates/main.html", "public/templates/footer.html"))
+	templates["accounts"] = template.Must(template.ParseFiles("public/pages/accounts.html"))
+	templates["loans"] = template.Must(template.ParseFiles("public/pages/loans.html"))
+	templates["transactions"] = template.Must(template.ParseFiles("public/pages/transactions.html"))
 }
 
 // Makes log to a log file
@@ -123,7 +126,7 @@ func loginHandler(writer http.ResponseWriter, request *http.Request) {
 			// sets session otions, age o session is set to one minute for testing purposes
 			session.Options = &sessions.Options{
 				Path:     "/",
-				MaxAge:   60,
+				MaxAge:   3600,
 				HttpOnly: true,
 			}
 
@@ -156,6 +159,7 @@ func bankHandler(writer http.ResponseWriter, request *http.Request) {
 	loadPage("bank", writer, "", client)
 }
 
+// logOutHandler destroys client session and redirects client to login page
 func logOutHandler(writer http.ResponseWriter, request *http.Request) {
 	session, _ := sessionStore.Get(request, "bank-user")
 	session.Values["user"] = nil
@@ -169,6 +173,48 @@ func logOutHandler(writer http.ResponseWriter, request *http.Request) {
 	http.Redirect(writer, request, "/", 302)
 }
 
+// accountHandler response with account data
+func accountHandler(writer http.ResponseWriter, request *http.Request) {
+	session, _ := sessionStore.Get(request, "bank-user")
+	data := session.Values["user"]
+	client, ok := data.(*database.Client)
+
+	if !ok {
+		http.Redirect(writer, request, "/", 302)
+	}
+
+	accounts := database.GetClientAccountsById(client.ID)
+	loadPage("accounts", writer, "", accounts)
+}
+
+// accountHandler response with account data
+func loansHandler(writer http.ResponseWriter, request *http.Request) {
+	session, _ := sessionStore.Get(request, "bank-user")
+	data := session.Values["user"]
+	client, ok := data.(*database.Client)
+
+	if !ok {
+		http.Redirect(writer, request, "/", 302)
+	}
+
+	loans := database.GetClientLoansById(client.ID)
+	loadPage("loans", writer, "", loans)
+}
+
+// accountHandler response with account data
+func transactionsHandler(writer http.ResponseWriter, request *http.Request) {
+	session, _ := sessionStore.Get(request, "bank-user")
+	data := session.Values["user"]
+	client, ok := data.(*database.Client)
+
+	if !ok {
+		http.Redirect(writer, request, "/", 302)
+	}
+
+	transactions := database.GetClientTransactionsById(client.ID)
+	loadPage("transactions", writer, "", transactions)
+}
+
 func main() {
 
 	router = mux.NewRouter().StrictSlash(false)
@@ -179,6 +225,9 @@ func main() {
 	router.HandleFunc("/login", loginHandler).Methods("POST")
 	router.HandleFunc("/bank", bankHandler).Methods("GET")
 	router.HandleFunc("/bank/logout", logOutHandler).Methods("GET")
+	router.HandleFunc("/bank/accounts", accountHandler).Methods("GET")
+	router.HandleFunc("/bank/loans", loansHandler).Methods("GET")
+	router.HandleFunc("/bank/transactions", transactionsHandler).Methods("GET")
 
 	server := &http.Server{
 		Addr:    ":8080",
