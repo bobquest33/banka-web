@@ -403,6 +403,7 @@ ALTER TABLE ONLY transactions ALTER COLUMN accountid SET DEFAULT nextval('transa
 --
 
 COPY accounts (accountid, clientid, balance) FROM stdin;
+1	1	653.299999999999955
 \.
 
 
@@ -410,7 +411,7 @@ COPY accounts (accountid, clientid, balance) FROM stdin;
 -- Name: accounts_accountid_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('accounts_accountid_seq', 1, false);
+SELECT pg_catalog.setval('accounts_accountid_seq', 1, true);
 
 
 --
@@ -425,6 +426,7 @@ SELECT pg_catalog.setval('accounts_clientid_seq', 1, false);
 --
 
 COPY cards (cardid, accountid, active) FROM stdin;
+1	1	t
 \.
 
 
@@ -439,7 +441,7 @@ SELECT pg_catalog.setval('cards_accountid_seq', 1, false);
 -- Name: cards_cardid_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('cards_cardid_seq', 1, false);
+SELECT pg_catalog.setval('cards_cardid_seq', 1, true);
 
 
 --
@@ -479,6 +481,8 @@ SELECT pg_catalog.setval('clients_id_seq', 1, true);
 --
 
 COPY loans (loanid, clientid, amount, paidamount, interest) FROM stdin;
+1	1	300	100	10
+2	1	900	200	5
 \.
 
 
@@ -493,7 +497,7 @@ SELECT pg_catalog.setval('loans_clientid_seq', 1, false);
 -- Name: loans_loanid_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('loans_loanid_seq', 1, false);
+SELECT pg_catalog.setval('loans_loanid_seq', 2, true);
 
 
 --
@@ -501,6 +505,8 @@ SELECT pg_catalog.setval('loans_loanid_seq', 1, false);
 --
 
 COPY transactions (transactionid, personid, clientrequest, accountid, transdate, value) FROM stdin;
+1	3	t	1	2016-06-20	100
+2	1	t	1	2016-06-20	100
 \.
 
 
@@ -515,7 +521,7 @@ SELECT pg_catalog.setval('transactions_accountid_seq', 1, false);
 -- Name: transactions_transactionid_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('transactions_transactionid_seq', 1, false);
+SELECT pg_catalog.setval('transactions_transactionid_seq', 2, true);
 
 
 --
