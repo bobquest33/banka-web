@@ -21,6 +21,7 @@ var (
 	router       *mux.Router
 	sessionStore *sessions.CookieStore
 	templates    map[string]*template.Template
+	attempts     int8
 )
 
 // ErrorData is structure for parsing error messages to template.
@@ -31,6 +32,7 @@ type ErrorData struct {
 // Initialize all necessary things as log files and such...
 func init() {
 	var err error
+	attempts = 0
 
 	logFile, err = os.Open("logFile.txt")
 
@@ -92,6 +94,16 @@ func loadPage(pageName string, writer http.ResponseWriter, templateName string, 
 
 // Home page handler
 func homePageHandler(writer http.ResponseWriter, request *http.Request) {
+	// try to get client data from session if they exist
+	session, _ := sessionStore.Get(request, "bank-user")
+	data := session.Values["user"]
+	_, ok := data.(*database.Client)
+
+	// If client data in session was found redirect to bank page
+	if ok {
+		http.Redirect(writer, request, "/bank", 302)
+	}
+
 	errorMessage := request.URL.Query().Get("err")
 
 	if errorMessage != "" {
@@ -100,6 +112,8 @@ func homePageHandler(writer http.ResponseWriter, request *http.Request) {
 			loadPage("index", writer, "", &ErrorData{Message: "Wrong username or password"})
 		} else if strings.EqualFold(errorMessage, "wrong-settings") {
 			loadPage("index", writer, "", &ErrorData{Message: "Wrong browser settings cannot log in"})
+		} else if strings.EqualFold(errorMessage, "blocked") {
+			loadPage("index", writer, "", &ErrorData{Message: "Too many wrong attempts your account is blocked"})
 		}
 
 	} else {
@@ -118,7 +132,7 @@ func loginHandler(writer http.ResponseWriter, request *http.Request) {
 		err := bcrypt.CompareHashAndPassword([]byte(client.Password), []byte(password))
 
 		// err == nil means if password entered by user matches password from db
-		if err == nil {
+		if err == nil && client.Active {
 			// store session with user info
 			session, _ := sessionStore.Get(request, "bank-user")
 			session.Values["user"] = &client
@@ -139,6 +153,21 @@ func loginHandler(writer http.ResponseWriter, request *http.Request) {
 
 			http.Redirect(writer, request, "/bank", 302)
 		} else {
+			// If account is innactive display user block message
+			if !client.Active {
+				http.Redirect(writer, request, "/?err=blocked", 302)
+			}
+			// If wrong attempt add up wrong attempts
+			if attempts < 3 {
+				attempts++
+			} else {
+				// If more than 3 attempts block user and display message
+				if database.BlockUser(client.ID) {
+					http.Redirect(writer, request, "/?err=blocked", 302)
+				}
+			}
+
+			// Else display wrong username or password message
 			http.Redirect(writer, request, "/?err=login", 302)
 		}
 	} else {
@@ -147,7 +176,6 @@ func loginHandler(writer http.ResponseWriter, request *http.Request) {
 }
 
 func bankHandler(writer http.ResponseWriter, request *http.Request) {
-
 	session, _ := sessionStore.Get(request, "bank-user")
 	data := session.Values["user"]
 	client, ok := data.(*database.Client)

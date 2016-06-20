@@ -196,6 +196,31 @@ func GetClientTransactionsById(id int) []Transaction {
 	return transactions
 }
 
+// BlockUser blocks user
+func BlockUser(id int) bool {
+	query := "UPDATE clientlogin SET active=$1 WHERE id=$2"
+
+	statement, err := database.Prepare(query)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	result, err := statement.Exec(false, id)
+
+	if err != nil {
+		return false
+	}
+
+	affected, err := result.RowsAffected()
+
+	if err != nil && affected == 0 {
+		return false
+	}
+
+	return true
+}
+
 // CloseConnection terminates connection to database
 func CloseConnection() {
 	database.Close()
