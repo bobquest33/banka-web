@@ -20,6 +20,7 @@ var (
 	logFile      *os.File
 	router       *mux.Router
 	sessionStore *sessions.CookieStore
+	session      *sessions.Session
 	templates    map[string]*template.Template
 	attempts     int8
 )
@@ -95,7 +96,7 @@ func loadPage(pageName string, writer http.ResponseWriter, templateName string, 
 // Home page handler
 func homePageHandler(writer http.ResponseWriter, request *http.Request) {
 	// try to get client data from session if they exist
-	session, _ := sessionStore.Get(request, "bank-user")
+	session, _ = sessionStore.Get(request, "bank-user")
 	data := session.Values["user"]
 	_, ok := data.(*database.Client)
 
@@ -131,65 +132,52 @@ func loginHandler(writer http.ResponseWriter, request *http.Request) {
 		client := database.GetClientByUsername(email)
 		err := bcrypt.CompareHashAndPassword([]byte(client.Password), []byte(password))
 
-		// err == nil means if password entered by user matches password from db
-		if err == nil && client.Active {
-			// store session with user info
-			session, _ := sessionStore.Get(request, "bank-user")
-			session.Values["user"] = &client
+		if client.Active {
+			// if password hash match password from db hash
+			if err == nil {
+				// store session with user info
+				session, _ = sessionStore.Get(request, "bank-user")
+				session.Values["user"] = &client
 
-			// sets session otions, age o session is set to one minute for testing purposes
-			session.Options = &sessions.Options{
-				Path:     "/",
-				MaxAge:   3600,
-				HttpOnly: true,
+				// sets session otions and save session
+				session.Options = &sessions.Options{
+					Path:     "/",
+					MaxAge:   3600,
+					HttpOnly: true,
+				}
+
+				err = session.Save(request, writer)
+
+				// if storing session fail
+				if err != nil {
+					log.Println(err)
+					http.Redirect(writer, request, "/?err=wrong-settings", 302)
+				}
+
+				http.Redirect(writer, request, "/bank", 302)
 			}
 
-			err := session.Save(request, writer)
-
-			if err != nil {
-				log.Println(err)
-				http.Redirect(writer, request, "/?err=wrong-settings", 302)
-			}
-
-			http.Redirect(writer, request, "/bank", 302)
-		} else {
-			// If account is innactive display user block message
-			if !client.Active {
-				http.Redirect(writer, request, "/?err=blocked", 302)
-			}
-			// If wrong attempt add up wrong attempts
+			// logic for 3 wrong attempts then ban functionality
 			if attempts < 3 {
 				attempts++
 			} else {
-				// If more than 3 attempts block user and display message
 				if database.BlockUser(client.ID) {
 					http.Redirect(writer, request, "/?err=blocked", 302)
 				}
+
+				log.Fatal("Cannot block User " + client.Username)
 			}
 
-			// Else display wrong username or password message
 			http.Redirect(writer, request, "/?err=login", 302)
 		}
-	} else {
-		http.Redirect(writer, request, "/?err=login", 302)
+
+		http.Redirect(writer, request, "/?err=blocked", 302)
 	}
-}
-
-func bankHandler(writer http.ResponseWriter, request *http.Request) {
-	session, _ := sessionStore.Get(request, "bank-user")
-	data := session.Values["user"]
-	client, ok := data.(*database.Client)
-
-	if !ok {
-		http.Redirect(writer, request, "/", 302)
-	}
-
-	loadPage("bank", writer, "", client)
 }
 
 // logOutHandler destroys client session and redirects client to login page
 func logOutHandler(writer http.ResponseWriter, request *http.Request) {
-	session, _ := sessionStore.Get(request, "bank-user")
+	session, _ = sessionStore.Get(request, "bank-user")
 	session.Values["user"] = nil
 	err := session.Save(request, writer)
 
@@ -201,9 +189,9 @@ func logOutHandler(writer http.ResponseWriter, request *http.Request) {
 	http.Redirect(writer, request, "/", 302)
 }
 
-// accountHandler response with account data
-func accountHandler(writer http.ResponseWriter, request *http.Request) {
-	session, _ := sessionStore.Get(request, "bank-user")
+// bankHandler serves the page which is available if user is logged in
+func bankHandler(writer http.ResponseWriter, request *http.Request) {
+	session, _ = sessionStore.Get(request, "bank-user")
 	data := session.Values["user"]
 	client, ok := data.(*database.Client)
 
@@ -211,13 +199,26 @@ func accountHandler(writer http.ResponseWriter, request *http.Request) {
 		http.Redirect(writer, request, "/", 302)
 	}
 
-	accounts := database.GetClientAccountsById(client.ID)
+	loadPage("bank", writer, "", client)
+}
+
+// accountHandler response with account data
+func accountHandler(writer http.ResponseWriter, request *http.Request) {
+	session, _ = sessionStore.Get(request, "bank-user")
+	data := session.Values["user"]
+	client, ok := data.(*database.Client)
+
+	if !ok {
+		http.Redirect(writer, request, "/", 302)
+	}
+
+	accounts := database.GetClientAccountsByID(client.ID)
 	loadPage("accounts", writer, "", accounts)
 }
 
 // accountHandler response with account data
 func loansHandler(writer http.ResponseWriter, request *http.Request) {
-	session, _ := sessionStore.Get(request, "bank-user")
+	session, _ = sessionStore.Get(request, "bank-user")
 	data := session.Values["user"]
 	client, ok := data.(*database.Client)
 
@@ -225,13 +226,13 @@ func loansHandler(writer http.ResponseWriter, request *http.Request) {
 		http.Redirect(writer, request, "/", 302)
 	}
 
-	loans := database.GetClientLoansById(client.ID)
+	loans := database.GetClientLoansByID(client.ID)
 	loadPage("loans", writer, "", loans)
 }
 
 // accountHandler response with account data
 func transactionsHandler(writer http.ResponseWriter, request *http.Request) {
-	session, _ := sessionStore.Get(request, "bank-user")
+	session, _ = sessionStore.Get(request, "bank-user")
 	data := session.Values["user"]
 	client, ok := data.(*database.Client)
 
@@ -239,7 +240,7 @@ func transactionsHandler(writer http.ResponseWriter, request *http.Request) {
 		http.Redirect(writer, request, "/", 302)
 	}
 
-	transactions := database.GetClientTransactionsById(client.ID)
+	transactions := database.GetClientTransactionsByID(client.ID)
 	loadPage("transactions", writer, "", transactions)
 }
 

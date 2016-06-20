@@ -8,6 +8,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// Data for database driver
 const (
 	dbUser     = "postgres"
 	dbPassword = "postgres"
@@ -94,8 +95,8 @@ func GetClientByUsername(clientUsername string) Client {
 	return Client{id, firstname, lastname, dateofbirth, username, password, active}
 }
 
-// GetClientAccountsById returns array of account structs with client data
-func GetClientAccountsById(id int) []Account {
+// GetClientAccountsByID returns array of account structs with client data
+func GetClientAccountsByID(id int) []Account {
 	query := "SELECT accountid,balance FROM accounts WHERE clientid=$1"
 
 	statement, err := database.Prepare(query)
@@ -106,18 +107,17 @@ func GetClientAccountsById(id int) []Account {
 
 	defer statement.Close()
 
-	var (
-		accountid int
-		balance   float64
-	)
-
 	result, err := statement.Query(id)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var accounts []Account
+	var (
+		accounts  []Account
+		accountid int
+		balance   float64
+	)
 
 	for result.Next() {
 		result.Scan(&accountid, &balance)
@@ -127,8 +127,8 @@ func GetClientAccountsById(id int) []Account {
 	return accounts
 }
 
-// GetClientLoansById return list of loans of the client
-func GetClientLoansById(id int) []Loan {
+// GetClientLoansByID return list of loans of the client
+func GetClientLoansByID(id int) []Loan {
 	query := "SELECT amount,paidamount,interest FROM loans WHERE clientid=$1"
 
 	statement, err := database.Prepare(query)
@@ -139,19 +139,18 @@ func GetClientLoansById(id int) []Loan {
 
 	defer statement.Close()
 
-	var (
-		amount     float64
-		paidamount float64
-		interest   float64
-	)
-
 	result, err := statement.Query(id)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var loans []Loan
+	var (
+		loans      []Loan
+		amount     float64
+		paidamount float64
+		interest   float64
+	)
 
 	for result.Next() {
 		result.Scan(&amount, &paidamount, &interest)
@@ -161,9 +160,9 @@ func GetClientLoansById(id int) []Loan {
 	return loans
 }
 
-// GetClientTransactionsById return list of users transactions
-func GetClientTransactionsById(id int) []Transaction {
-	query := "SELECT personid,clientrequest,accountid,transdate,value FROM transactions WHERE personid=$1"
+// GetClientTransactionsByID return list of users transactions
+func GetClientTransactionsByID(id int) []Transaction {
+	query := "SELECT clientrequest,accountid,transdate,value FROM transactions WHERE personid=$1"
 
 	statement, err := database.Prepare(query)
 
@@ -173,23 +172,23 @@ func GetClientTransactionsById(id int) []Transaction {
 
 	defer statement.Close()
 
-	var (
-		clientrequest bool
-		accountid     int
-		transdate     string
-		value         float64
-	)
-
 	result, err := statement.Query(id)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var transactions []Transaction
+	var (
+		transactions  []Transaction
+		clientrequest bool
+		accountid     int
+		transdate     string
+		value         float64
+	)
 
 	for result.Next() {
 		result.Scan(&clientrequest, &accountid, &transdate, &value)
+		log.Println(clientrequest, " ", accountid, " ", transdate, " ", value)
 		transactions = append(transactions, Transaction{clientrequest, accountid, transdate, value})
 	}
 
