@@ -35,14 +35,11 @@ func init() {
 	var err error
 	attempts = 0
 
-	logFile, err = os.Open("logFile.txt")
+	// Open log file with read only permissions, if file does not exists create one.
+	logFile, err = os.OpenFile("logFile.txt", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 
-	if !os.IsExist(err) {
-		logFile, err = os.Create("logFile.txt")
-
-		if err != nil {
-			log.Fatal(err)
-		}
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	sessionStore = sessions.NewCookieStore([]byte("much-secret-phrase-very-secure"))
@@ -67,7 +64,7 @@ func makeLog(logInput string) {
 	logMessage := logInput + " " + currentTime + "\n"
 
 	logFile.WriteString(logMessage)
-
+	logFile.Sync()
 }
 
 // Load html page from directory
@@ -245,7 +242,7 @@ func transactionsHandler(writer http.ResponseWriter, request *http.Request) {
 }
 
 func main() {
-
+	defer logFile.Close()
 	router = mux.NewRouter().StrictSlash(false)
 	resourceFileServer := http.FileServer(http.Dir("./public/resources/"))
 	router.PathPrefix("/resources/").Handler(http.StripPrefix("/resources/", resourceFileServer))
