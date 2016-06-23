@@ -55,6 +55,7 @@ func init() {
 	templates["accounts"] = template.Must(template.ParseFiles("public/pages/accounts.html"))
 	templates["loans"] = template.Must(template.ParseFiles("public/pages/loans.html"))
 	templates["transactions"] = template.Must(template.ParseFiles("public/pages/transactions.html"))
+	templates["settings"] = template.Must(template.ParseFiles("public/pages/settings.html"))
 }
 
 // Makes log to a log file
@@ -139,7 +140,7 @@ func loginHandler(writer http.ResponseWriter, request *http.Request) {
 				// sets session otions and save session
 				session.Options = &sessions.Options{
 					Path:     "/",
-					MaxAge:   60,
+					MaxAge:   1800,
 					HttpOnly: true,
 				}
 
@@ -243,6 +244,56 @@ func transactionsHandler(writer http.ResponseWriter, request *http.Request) {
 	loadPage("transactions", writer, "", transactions)
 }
 
+func settingsHandler(writer http.ResponseWriter, request *http.Request) {
+	session, _ = sessionStore.Get(request, "bank-user")
+	data := session.Values["user"]
+	_, ok := data.(*database.Client)
+
+	if !ok {
+		http.Redirect(writer, request, "/", 302)
+	}
+
+	loadPage("settings", writer, "", nil)
+}
+
+func changePasswordHandler(writer http.ResponseWriter, request *http.Request) {
+	session, _ = sessionStore.Get(request, "bank-user")
+	data := session.Values["user"]
+	client, ok := data.(*database.Client)
+
+	if !ok {
+		http.Redirect(writer, request, "/", 302)
+	}
+
+	oldPassword := request.FormValue("oldPassword")
+	newPassword := request.FormValue("newPassword")
+	repeatNewPassword := request.FormValue("repeatNewPassword")
+
+	if sanitize.ParsePassword(newPassword) && sanitize.ParsePassword(repeatNewPassword) {
+		oldPassErr := bcrypt.CompareHashAndPassword([]byte(client.Password), []byte(oldPassword))
+
+		if oldPassErr == nil {
+			if strings.EqualFold(newPassword, repeatNewPassword) {
+				newPasswordHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+
+				if err != nil {
+					http.Error(writer, "We are sorry it seems theres a problem with our service..", http.StatusInternalServerError)
+				}
+
+				database.ChangePassword(client.ID, newPasswordHash)
+
+				http.Redirect(writer, request, "/bank", 302)
+			} else {
+				http.Redirect(writer, request, "/bank?err=new", 302)
+			}
+		} else {
+			http.Redirect(writer, request, "/bank?err=old", 302)
+		}
+	} else {
+		http.Redirect(writer, request, "/bank?err=format", 302)
+	}
+}
+
 func main() {
 	defer logFile.Close()
 	router = mux.NewRouter().StrictSlash(false)
@@ -256,6 +307,8 @@ func main() {
 	router.HandleFunc("/bank/accounts", accountHandler).Methods("GET")
 	router.HandleFunc("/bank/loans", loansHandler).Methods("GET")
 	router.HandleFunc("/bank/transactions", transactionsHandler).Methods("GET")
+	router.HandleFunc("/bank/settings", settingsHandler).Methods("GET")
+	router.HandleFunc("/bank/settings/changepass", changePasswordHandler).Methods("POST")
 
 	server := &http.Server{
 		Addr:    ":8080",

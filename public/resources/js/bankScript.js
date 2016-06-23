@@ -36,4 +36,15 @@ $(function(){
 
         return false;
     });
+
+    $(".settings").click(function(){
+        $(".nav ul li a").each(function(){
+            $(this).removeClass("selected")
+        });
+        $(this).addClass("selected")
+        $("main").html("");
+        $("main").load("/bank/settings");
+
+        return false;
+    });
 });

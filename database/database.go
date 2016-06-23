@@ -272,6 +272,23 @@ func BlockUser(id int) bool {
 	return true
 }
 
+// ChangePassword changes password of user selected by id
+func ChangePassword(id int, newPassword []byte) {
+	query := "UPDATE clientlogin SET password=$1 WHERE id=$2"
+
+	statement, err := database.Prepare(query)
+
+	if err != nil {
+		log.Fatal(err, " Cannot prepare statement")
+	}
+
+	_, err = statement.Exec(newPassword, id)
+
+	if err != nil {
+		log.Fatal(err, " Cannot execute statement")
+	}
+}
+
 // CloseConnection terminates connection to database
 func CloseConnection() {
 	database.Close()
