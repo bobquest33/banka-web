@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"log"
+	"time"
 
 	// Import of postgresql driver
 	_ "github.com/lib/pq"
@@ -23,13 +24,15 @@ var (
 
 // Client structs hold client data from the database
 type Client struct {
-	ID          int
-	FirstName   string
-	LastName    string
-	DateOfBirth string
-	Username    string
-	Password    string
-	Active      bool
+	ID             int
+	FirstName      string
+	LastName       string
+	DateOfBirth    string
+	Username       string
+	Password       string
+	Active         bool
+	WrongAttempts  int8
+	LastWrongLogin time.Time
 }
 
 // Account struct holds cllients account data
@@ -66,7 +69,7 @@ func init() {
 
 // GetClientByUsername returns a client struct with client data
 func GetClientByUsername(clientUsername string) Client {
-	query = "SELECT clients.id,clients.firstname,clients.lastname,clients.dateofbirth,clientlogin.username,clientlogin.password,clientlogin.active FROM clientlogin INNER JOIN clients ON clientlogin.id=clients.id WHERE clientlogin.username=$1"
+	query = "SELECT clients.id,clients.firstname,clients.lastname,clients.dateofbirth,clientlogin.username,clientlogin.password,clientlogin.active, clientlogin.wronglogincount, clientlogin.lastwronglogin FROM clientlogin INNER JOIN clients ON clientlogin.id=clients.id WHERE clientlogin.username=$1"
 
 	statement, err := database.Prepare(query)
 
@@ -77,22 +80,35 @@ func GetClientByUsername(clientUsername string) Client {
 	defer statement.Close()
 
 	var (
-		id          int
-		firstname   string
-		lastname    string
-		dateofbirth string
-		username    string
-		password    string
-		active      bool
+		id              int
+		firstname       string
+		lastname        string
+		dateofbirth     string
+		username        string
+		password        string
+		active          bool
+		wronglogincount int8
+		lastwronglogin  string
+		lastWrongLogin  time.Time
 	)
 
-	err = statement.QueryRow(clientUsername).Scan(&id, &firstname, &lastname, &dateofbirth, &username, &password, &active)
+	err = statement.QueryRow(clientUsername).Scan(&id, &firstname, &lastname, &dateofbirth, &username, &password, &active, &wronglogincount, &lastwronglogin)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return Client{id, firstname, lastname, dateofbirth, username, password, active}
+	if lastwronglogin == "" {
+		lastWrongLogin = time.Now()
+	} else {
+		lastWrongLogin, err = time.Parse(time.RFC3339, lastwronglogin)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	return Client{id, firstname, lastname, dateofbirth, username, password, active, wronglogincount, lastWrongLogin}
 }
 
 // GetClientAccountsByID returns array of account structs with client data
@@ -195,6 +211,46 @@ func GetClientTransactionsByID(id int) []Transaction {
 	return transactions
 }
 
+// ResetClientWrongAttempts restest wrong login attempts.
+func ResetClientWrongAttempts(id int) {
+	statement, err := database.Prepare("UPDATE clientlogin SET wronglogincount=0 WHERE id=$1")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = statement.Exec(id)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// AddWrongLoginAttempt add up worng login attempt in db and sets timestamp of last bad login attempt
+func AddWrongLoginAttempt(client Client) {
+	if client.WrongAttempts > 0 {
+		expirationTime := client.LastWrongLogin
+		expirationTime.Add(3 * time.Hour)
+		actualTime := time.Now()
+
+		if actualTime.After(expirationTime) {
+			ResetClientWrongAttempts(client.ID)
+		}
+	}
+
+	statement, err := database.Prepare("UPDATE clientlogin SET wronglogincount=wronglogincount + 1, lastwronglogin=CURRENT_TIMESTAMP WHERE id=$1")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = statement.Exec(client.ID)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 // BlockUser blocks user
 func BlockUser(id int) bool {
 	query := "UPDATE clientlogin SET active=$1 WHERE id=$2"
@@ -202,18 +258,14 @@ func BlockUser(id int) bool {
 	statement, err := database.Prepare(query)
 
 	if err != nil {
-		log.Fatal(err)
-	}
-
-	result, err := statement.Exec(false, id)
-
-	if err != nil {
+		log.Fatal(err, " Cannot prepare statement")
 		return false
 	}
 
-	affected, err := result.RowsAffected()
+	_, err = statement.Exec(false, id)
 
-	if err != nil && affected == 0 {
+	if err != nil {
+		log.Fatal(err, " Cannot execute statement")
 		return false
 	}
 

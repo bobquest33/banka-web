@@ -139,7 +139,7 @@ func loginHandler(writer http.ResponseWriter, request *http.Request) {
 				// sets session otions and save session
 				session.Options = &sessions.Options{
 					Path:     "/",
-					MaxAge:   3600,
+					MaxAge:   60,
 					HttpOnly: true,
 				}
 
@@ -151,24 +151,26 @@ func loginHandler(writer http.ResponseWriter, request *http.Request) {
 					http.Redirect(writer, request, "/?err=wrong-settings", 302)
 				}
 
+				database.ResetClientWrongAttempts(client.ID)
 				http.Redirect(writer, request, "/bank", 302)
-			}
-
-			// logic for 3 wrong attempts then ban functionality
-			if attempts < 3 {
-				attempts++
 			} else {
-				if database.BlockUser(client.ID) {
-					http.Redirect(writer, request, "/?err=blocked", 302)
+				// logic for 3 wrong attempts then ban functionality
+				if client.WrongAttempts < 2 {
+					database.AddWrongLoginAttempt(client)
+					http.Redirect(writer, request, "/?err=login", 302)
+				} else {
+					if database.BlockUser(client.ID) {
+						http.Redirect(writer, request, "/?err=blocked", 302)
+					} else {
+						log.Fatal("Cannot block user ", client.Username)
+					}
 				}
-
-				log.Fatal("Cannot block User " + client.Username)
 			}
-
-			http.Redirect(writer, request, "/?err=login", 302)
+		} else {
+			http.Redirect(writer, request, "/?err=blocked", 302)
 		}
-
-		http.Redirect(writer, request, "/?err=blocked", 302)
+	} else {
+		http.Redirect(writer, request, "/?err=login", 302)
 	}
 }
 
