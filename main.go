@@ -22,7 +22,6 @@ var (
 	sessionStore *sessions.CookieStore
 	session      *sessions.Session
 	templates    map[string]*template.Template
-	attempts     int8
 )
 
 // ErrorData is structure for parsing error messages to template.
@@ -33,7 +32,6 @@ type ErrorData struct {
 // Initialize all necessary things as log files and such...
 func init() {
 	var err error
-	attempts = 0
 
 	// Open log file with read only permissions, if file does not exists create one.
 	logFile, err = os.OpenFile("logFile.txt", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
